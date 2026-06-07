@@ -30,11 +30,33 @@ const ai = genkit({
 // Basic Hi
 ai.defineFlow('basic-hi', async () => {
   const { text } = await ai.generate({
-    model: vertexAI.model('gemini-2.5-flash'),
+    model: vertexAI.model('gemini-3.1-flash-lite'),
     prompt: 'You are a helpful AI assistant named Walt, say hello',
   });
 
   return text;
+});
+
+ai.defineFlow('basic-hi-lite', async () => {
+  const { text } = await ai.generate({
+    model: vertexAI.model('gemini-flash-lite-latest'),
+    prompt: 'You are a helpful AI assistant named Walt, say hello',
+  });
+
+  return text;
+});
+
+// Flex/Priority PayGo
+ai.defineFlow('paygo', async () => {
+  const response = await ai.generate({
+    model: vertexAI.model('gemini-3.1-flash-lite-preview'),
+    prompt: 'You are a helpful AI assistant named Walt, say hello.',
+    config: {
+      payGo: 'priority', // or priority-only, flex, flex-only.
+    },
+  });
+
+  return response;
 });
 
 // Gemini 3.1 thinkingLevel config
@@ -450,7 +472,7 @@ ai.defineFlow('gemini-image-editing', async (_) => {
 // Nano banana pro config
 ai.defineFlow('nano-banana-pro', async (_) => {
   const { media } = await ai.generate({
-    model: vertexAI.model('gemini-3-pro-image-preview'),
+    model: vertexAI.model('gemini-3-pro-image'),
     prompt: 'Generate a picture of a sunset in the mountains by a lake',
     config: {
       imageConfig: {
@@ -465,7 +487,7 @@ ai.defineFlow('nano-banana-pro', async (_) => {
 
 ai.defineFlow('nano-banana-2', async (_) => {
   const { media } = await ai.generate({
-    model: vertexAI.model('gemini-3.1-flash-image-preview'),
+    model: vertexAI.model('gemini-3.1-flash-image'),
     prompt:
       'Generate an image of the CN Tower. Use words to show the current date, time and weather on the image.',
     config: {
@@ -544,7 +566,7 @@ ai.defineFlow('imagen-try-on', async (_) => {
 
 ai.defineFlow('veo-text-prompt', async (_, { sendChunk }) => {
   let { operation } = await ai.generate({
-    model: vertexAI.model('veo-3.0-generate-001'),
+    model: vertexAI.model('veo-3.1-lite-generate-001'),
     prompt: [
       {
         text: 'slowly flying over a meadow in full bloom',

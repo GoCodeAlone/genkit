@@ -23,10 +23,12 @@
 import pytest
 
 from genkit import Genkit, Message, ModelResponse, Part, Plugin, Role, TextPart
-from genkit._core._action import Action, ActionMetadata, ActionRunContext
+from genkit._core._action import Action, ActionRunContext
 from genkit._core._model import ModelRequest
 from genkit._core._registry import ActionKind
-from genkit._core._typing import FinishReason
+from genkit._core._typing import ActionMetadata, FinishReason
+from genkit.middleware import BaseMiddleware, GenerateMiddleware
+from genkit.plugin_api import new_middleware
 
 
 class AsyncResolveOnlyPlugin(Plugin):
@@ -62,7 +64,7 @@ class AsyncResolveOnlyPlugin(Plugin):
         """List available actions."""
         return [
             ActionMetadata(
-                kind=ActionKind.MODEL,
+                action_type=ActionKind.MODEL,
                 name=f'{self.name}/lazy-model',
             )
         ]
@@ -101,10 +103,43 @@ class AsyncInitPlugin(Plugin):
         """List available actions."""
         return [
             ActionMetadata(
-                kind=ActionKind.MODEL,
+                action_type=ActionKind.MODEL,
                 name=f'{self.name}/init-model',
             )
         ]
+
+
+class _RegistryMw(BaseMiddleware):
+    pass
+
+
+class MiddlewareListingPlugin(Plugin):
+    """Plugin that contributes middleware via list_middleware."""
+
+    name = 'mw-list-plugin'
+
+    async def init(self) -> list[Action]:
+        return []
+
+    async def resolve(self, action_type: ActionKind, name: str) -> Action | None:
+        return None
+
+    async def list_actions(self) -> list[ActionMetadata]:
+        return []
+
+    def list_middleware(self) -> list[GenerateMiddleware]:
+        return [new_middleware(_RegistryMw, name='ai_plugin_test_mw')]
+
+
+@pytest.mark.asyncio
+async def test_plugin_list_middleware_registers_on_registry() -> None:
+    """Descriptors from Plugin.list_middleware appear under list_values('middleware')."""
+    ai = Genkit(plugins=[MiddlewareListingPlugin()])
+    names = ai.registry.list_values('middleware')
+    assert 'ai_plugin_test_mw' in names
+    desc = ai.registry.lookup_value('middleware', 'ai_plugin_test_mw')
+    assert desc is not None
+    assert isinstance(desc, GenerateMiddleware)
 
 
 @pytest.mark.asyncio

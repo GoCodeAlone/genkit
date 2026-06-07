@@ -153,6 +153,15 @@ class HttpErrorWireFormat(BaseModel):
     status: str = StatusCodes.INTERNAL.name
 
 
+class GenkitInterrupt(Exception):  # noqa: N818 - marker base class; intentionally not suffixed *Error
+    """Marker base class for tool interrupts.
+
+    Raised by tools to pause execution and hand control back to the caller.
+    The tracing wrapper uses this to distinguish control-flow interrupts from
+    real errors so they don't appear as red failures in the Dev UI.
+    """
+
+
 class GenkitError(Exception):
     """Base error class for Genkit errors."""
 
@@ -186,8 +195,14 @@ class GenkitError(Exception):
         self.status: StatusName = temp_status
         self.http_code: int = http_status_code(temp_status)
 
+        # When this error wraps another (the common shape — the action runtime
+        # catches the underlying failure and re-raises as ``GenkitError(...,
+        # cause=original)``), surface the cause in the default string form so
+        # downstream consumers (logs, model-facing tool error messages, the Dev
+        # UI) see the real reason instead of the bare wrapper text.
         source_prefix = f'{source}: ' if source else ''
-        super().__init__(f'{source_prefix}{self.status}: {message}')
+        cause_suffix = f': {cause}' if cause else ''
+        super().__init__(f'{source_prefix}{self.status}: {message}{cause_suffix}')
         self.original_message: str = message
 
         if not details:

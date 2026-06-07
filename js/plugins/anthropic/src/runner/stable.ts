@@ -40,17 +40,15 @@ import type {
 } from 'genkit';
 import { logger } from 'genkit/logging';
 
-import { KNOWN_CLAUDE_MODELS, extractVersion } from '../models.js';
 import {
   AnthropicConfigSchema,
   type AnthropicDocumentOptions,
   type ClaudeRunnerParams,
 } from '../types.js';
-import { removeUndefinedProperties } from '../utils.js';
+import { checkModelName, removeUndefinedProperties } from '../utils.js';
 import { BaseRunner } from './base.js';
 import {
   citationsDeltaToPart,
-  inputJsonDeltaError,
   redactedThinkingBlockToPart,
   textBlockToPart,
   textDeltaToPart,
@@ -225,10 +223,9 @@ export class Runner extends BaseRunner<RunnerTypes> {
       );
     }
 
-    const model = KNOWN_CLAUDE_MODELS[modelName];
     const { system, messages } = this.toAnthropicMessages(request.messages);
     const mappedModelName =
-      request.config?.version ?? extractVersion(model, modelName);
+      request.config?.version ?? checkModelName(modelName);
 
     const thinkingConfig = this.toAnthropicThinkingConfig(
       request.config?.thinking
@@ -279,10 +276,9 @@ export class Runner extends BaseRunner<RunnerTypes> {
       );
     }
 
-    const model = KNOWN_CLAUDE_MODELS[modelName];
     const { system, messages } = this.toAnthropicMessages(request.messages);
     const mappedModelName =
-      request.config?.version ?? extractVersion(model, modelName);
+      request.config?.version ?? checkModelName(modelName);
 
     const thinkingConfig = this.toAnthropicThinkingConfig(
       request.config?.thinking
@@ -366,10 +362,7 @@ export class Runner extends BaseRunner<RunnerTypes> {
         return citationsDeltaToPart(delta);
       }
 
-      if (delta.type === 'input_json_delta') {
-        throw inputJsonDeltaError();
-      }
-
+      // input_json_delta - ignore
       // signature_delta - ignore
       return undefined;
     }
@@ -493,6 +486,7 @@ export class Runner extends BaseRunner<RunnerTypes> {
         },
       },
       custom: response,
+      raw: response,
     };
   }
 }

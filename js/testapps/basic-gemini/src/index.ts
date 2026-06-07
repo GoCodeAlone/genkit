@@ -42,6 +42,46 @@ const ai = genkit({
   ],
 });
 
+ai.defineFlow('deep-research-visualization', async (_, { sendChunk }) => {
+  let { operation } = await ai.generate({
+    model: googleAI.model('deep-research-preview-04-2026'),
+    prompt:
+      'Analyze global semiconductor market trends. Include graphics showing market share changes.',
+    config: {
+      visualization: 'AUTO',
+    },
+  });
+
+  if (!operation) throw new Error('No operation returned');
+
+  while (!operation.done) {
+    sendChunk('check status of operation ' + operation.id);
+    operation = await ai.checkOperation(operation);
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+  }
+  return operation.output?.message?.content;
+});
+
+ai.defineFlow('deep-research-code-execution', async (_, { sendChunk }) => {
+  let { operation } = await ai.generate({
+    model: googleAI.model('deep-research-preview-04-2026'),
+    prompt:
+      'Start with 1. Add 3, then divide by 2. Take that answer, and continue adding 3 and dividing by 2 to each successive answer and tell me the first 20 terms in the sequence',
+    config: {
+      codeExecution: true,
+    },
+  });
+
+  if (!operation) throw new Error('No operation returned');
+
+  while (!operation.done) {
+    sendChunk('check status of operation ' + operation.id);
+    operation = await ai.checkOperation(operation);
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+  }
+  return operation.output?.message?.content;
+});
+
 ai.defineFlow('maps-grounding', async () => {
   const { text, raw } = await ai.generate({
     model: googleAI.model('gemini-3.1-pro-preview'),
@@ -86,8 +126,20 @@ ai.defineFlow('combine tools and builtins', async () => {
 
 ai.defineFlow('basic-hi', async () => {
   const { text } = await ai.generate({
+    model: googleAI.model('gemini-3.5-flash'),
+    prompt: 'You are a helpful AI assistant named Walt, say hello',
+  });
+
+  return text;
+});
+
+ai.defineFlow('basic-hi-flex-tier', async () => {
+  const { text } = await ai.generate({
     model: googleAI.model('gemini-flash-lite-latest'),
     prompt: 'You are a helpful AI assistant named Walt, say hello',
+    config: {
+      serviceTier: 'flex', // or 'standard' or 'priority'
+    },
   });
 
   return text;
@@ -587,6 +639,61 @@ ai.defineFlow(
   }
 );
 
+ai.defineFlow(
+  {
+    name: 'tts-audio-tags',
+    inputSchema: z.string().default(
+      `DIRECTOR'S NOTES
+Style:
+* The "Vocal Smile": You must hear the grin in the audio. The soft palate is
+always raised to keep the tone bright, sunny, and explicitly inviting.
+* Dynamics: High projection without shouting. Punchy consonants and elongated
+vowels on excitement words (e.g., "Beauuutiful morning").
+
+Pace: Speaks at an energetic pace, keeping up with the fast music.  Speaks
+with A "bouncing" cadence. High-speed delivery with fluid transitions — no dead
+air, no gaps.
+
+Accent: Jaz is from Brixton, London
+
+SAMPLE CONTEXT
+Jaz is the industry standard for Top 40 radio, high-octane event promos, or any
+script that requires a charismatic Estuary accent and 11/10 infectious energy.
+
+TRANSCRIPT
+[excitedly] Yes, massive vibes in the studio! You are locked in and it is
+absolutely popping off in London right now. If you're stuck on the tube, or
+just sat there pretending to work... stop it. Seriously, I see you.
+[shouting] Turn this up! We've got the project roadmap landing in three,
+two... let's go!`
+    ),
+    outputSchema: z.object({ media: z.string() }),
+  },
+  async (prompt: string) => {
+    const { media } = await ai.generate({
+      model: googleAI.model('gemini-3.1-flash-tts-preview'),
+      config: {
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Algenib' },
+          },
+        },
+      },
+      prompt,
+    });
+    if (!media) {
+      throw new Error('no media returned');
+    }
+    const audioBuffer = Buffer.from(
+      media.url.substring(media.url.indexOf(',') + 1),
+      'base64'
+    );
+    return {
+      media: 'data:audio/wav;base64,' + (await toWav(audioBuffer)),
+    };
+  }
+);
+
 async function toWav(
   pcmData: Buffer,
   channels = 1,
@@ -789,6 +896,29 @@ async function downloadVideo(video: MediaPart, path: string) {
   Readable.from(videoDownloadResponse.body).pipe(fs.createWriteStream(path));
 }
 
+ai.defineFlow('video-to-image-generation', async () => {
+  const response = await ai.generate({
+    model: googleAI.model('gemini-3.1-flash-image'),
+    prompt: [
+      {
+        media: {
+          url: 'https://www.youtube.com/watch?v=QO30-W3b_vw',
+        },
+        metadata: {
+          videoMetadata: {
+            fps: 0.5,
+          },
+        },
+      },
+      {
+        text: 'Can you create an image that explains what this video is about?',
+      },
+    ],
+  });
+
+  return response;
+});
+
 // Test external URL with Gemini 3.0 (should pass as fileUri)
 ai.defineFlow('external-url-gemini-3.0', async () => {
   const { text } = await ai.generate({
@@ -857,6 +987,78 @@ ai.defineFlow('embed-multimodal', async () => {
 
   const embeddings = await ai.embed({
     embedder: googleAI.embedder('gemini-embedding-2-preview'),
+    content: Document.fromParts([
+      { text: 'A picture of Albert Einstein.' },
+      {
+        media: {
+          contentType: 'image/jpeg',
+          url: `data:image/jpeg;base64,${photoBase64}`,
+        },
+      },
+    ]),
+    options: {
+      outputDimensionality: 256,
+    },
+  });
+
+  return embeddings;
+});
+
+ai.defineFlow('antigravity', async () => {
+  const { message } = await ai.generate({
+    model: googleAI.model('antigravity-preview-05-2026'),
+    prompt: 'Read Hacker News, summarize the top 10 stories.',
+    config: {
+      environment: 'remote',
+      // not specifying tools allows all the default tools
+    },
+  });
+  return message;
+});
+
+ai.defineFlow('antigravity-tools', async () => {
+  const { message } = await ai.generate({
+    model: googleAI.model('antigravity-preview-05-2026'),
+    prompt: 'Read Hacker News, summarize the top 10 stories.',
+    config: {
+      environment: 'remote',
+      tools: [{ type: 'google_search' }], // This allows ONLY google_search
+    },
+  });
+  return message;
+});
+
+ai.defineFlow('antigravity-multi-turn', async () => {
+  const response1 = await ai.generate({
+    model: googleAI.model('antigravity-preview-05-2026'),
+    prompt: 'Create a simple python script to print hello world.',
+    config: {
+      environment: 'remote',
+      store: true,
+    },
+  });
+
+  const interactionId = response1.message?.metadata?.interactionId as string;
+  const environmentId = response1.message?.metadata?.environmentId as string;
+
+  const response2 = await ai.generate({
+    model: googleAI.model('antigravity-preview-05-2026'),
+    prompt: 'Now modify the script to print it backwards and run it.',
+    config: {
+      environment: environmentId,
+      previousInteractionId: interactionId,
+      store: true,
+    },
+  });
+
+  return { turn1: response1.message, turn2: response2.message };
+});
+
+ai.defineFlow('embed-multimodal-gemini-embedding-2', async () => {
+  const photoBase64 = fs.readFileSync('photo.jpg', { encoding: 'base64' });
+
+  const embeddings = await ai.embed({
+    embedder: googleAI.embedder('gemini-embedding-2'),
     content: Document.fromParts([
       { text: 'A picture of Albert Einstein.' },
       {
@@ -977,6 +1179,101 @@ ai.defineFlow('deep-research-multi-turn', async (_, { sendChunk }) => {
   }
 
   return op2.output?.message?.content.find((p) => !!p.text)?.text;
+});
+
+ai.defineFlow('deep-research-preview', async (_, { sendChunk }) => {
+  const storeName = await createFileSearchStore();
+  await uploadBlobToFileSearchStore(storeName);
+
+  let { operation } = await ai.generate({
+    model: googleAI.model('deep-research-preview-04-2026'),
+    prompt:
+      'Analyze the differences between the character in the provided document and modern quantum computing principles. Create a chart to visualize the comparison.',
+    config: {
+      visualization: 'AUTO',
+      googleSearch: true,
+      codeExecution: true,
+      fileSearch: {
+        fileSearchStoreNames: [storeName],
+      },
+    },
+  });
+
+  if (!operation) {
+    throw new Error('Expected the model to return an operation');
+  }
+
+  while (!operation.done) {
+    sendChunk('check status of operation ' + operation.id);
+    operation = await ai.checkOperation(operation);
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+  }
+
+  await deleteFileSearchStore(storeName);
+
+  if (operation.error) {
+    sendChunk('Error: ' + operation.error.message);
+    throw new Error('failed to deep research: ' + operation.error.message);
+  }
+
+  return operation.output?.message?.content;
+});
+
+ai.defineFlow('deep-research-collaboration', async (_, { sendChunk }) => {
+  sendChunk('--- Turn 1: Requesting a Plan ---');
+  let { operation } = await ai.generate({
+    model: googleAI.model('deep-research-preview-04-2026'),
+    prompt: 'I want to research the history of artificial intelligence.',
+    config: {
+      collaborativePlanning: true,
+      thinkingSummaries: 'AUTO',
+      store: true,
+    },
+  });
+
+  if (!operation) throw new Error('No operation returned');
+
+  while (!operation.done) {
+    sendChunk('Turn 1 status: ' + operation.id);
+    operation = await ai.checkOperation(operation);
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+  }
+
+  if (operation.error) {
+    throw new Error('Turn 1 failed: ' + operation.error.message);
+  }
+
+  const response1 = operation.output?.message?.content.find(
+    (p) => !!p.text
+  )?.text;
+  sendChunk('Proposed Plan: ' + response1);
+
+  sendChunk('\n--- Turn 2: Approving and Executing Plan ---');
+  const interactionId = operation.id;
+
+  let { operation: op2 } = await ai.generate({
+    model: googleAI.model('deep-research-max-preview-04-2026'),
+    prompt: 'Looks great! Proceed with the research.',
+    config: {
+      collaborativePlanning: false,
+      thinkingSummaries: 'AUTO',
+      previousInteractionId: interactionId,
+    },
+  });
+
+  if (!op2) throw new Error('No operation returned for turn 2');
+
+  while (!op2.done) {
+    sendChunk('Turn 2 status: ' + op2.id);
+    op2 = await ai.checkOperation(op2);
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+  }
+
+  if (op2.error) {
+    throw new Error('Turn 2 failed: ' + op2.error.message);
+  }
+
+  return op2.output?.message?.content;
 });
 
 // Deep research cancel example
@@ -1118,15 +1415,6 @@ ai.defineFlow('lyria-foreign-language', async () => {
   });
 
   return response;
-});
-
-// Gemma 3
-ai.defineFlow('gemma-3', async () => {
-  const { text } = await ai.generate({
-    model: googleAI.model('gemma-3-27b-it'),
-    prompt: 'Tell me a short joke about a programmer.',
-  });
-  return text;
 });
 
 // Gemma 4 with thinkingConfig

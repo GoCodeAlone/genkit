@@ -175,6 +175,24 @@ class GenkitError(GenkitModel):
     data: Data | None = None
 
 
+class MiddlewareDesc(GenkitModel):
+    """Model for middlewaredesc data."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
+    name: str = Field(...)
+    description: str | None = None
+    config_schema: Any | ConfigSchema | None = Field(default=None)
+    metadata: Metadata | None = None
+
+
+class MiddlewareRef(GenkitModel):
+    """Model for middlewareref data."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
+    name: str = Field(...)
+    config: Any | None = Field(default=None)
+
+
 class CandidateError(GenkitModel):
     """Model for candidateerror data."""
 
@@ -325,24 +343,6 @@ class MessageData(GenkitModel):
     metadata: Metadata | None = None
 
 
-class MiddlewareDesc(GenkitModel):
-    """Model for middlewaredesc data."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
-    name: str = Field(...)
-    description: str | None = None
-    config_schema: Any | ConfigSchema | None = Field(default=None)
-    metadata: Any | Metadata | None = Field(default=None)
-
-
-class MiddlewareRef(GenkitModel):
-    """Model for middlewareref data."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
-    name: str = Field(...)
-    config: Any | None = Field(default=None)
-
-
 class ModelInfo(GenkitModel):
     """Model for modelinfo data."""
 
@@ -456,6 +456,7 @@ class ToolDefinition(GenkitModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
     name: str = Field(...)
+    key: str | None = None
     description: str = Field(...)
     input_schema: Any | dict[str, Any] | None = Field(
         default=None, description='Valid JSON Schema representing the input of the tool.'
@@ -711,19 +712,6 @@ class SpanEndEvent(GenkitModel):
     type: str = Field(...)
 
 
-class SpanMetadata(GenkitModel):
-    """Model for spanmetadata data."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
-    name: str = Field(...)
-    state: Literal['success', 'error'] | None = None
-    input: Any | None = Field(default=None)
-    output: Any | None = Field(default=None)
-    is_root: bool | None = None
-    metadata: Metadata | None = None
-    path: str | None = None
-
-
 class SpanStartEvent(GenkitModel):
     """Model for spanstartevent data."""
 
@@ -851,10 +839,7 @@ class Values(GenkitModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
 
 
-class TelemetryLabels(GenkitModel):
-    """Model for telemetrylabels data."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(alias_generator=to_camel, extra='forbid', populate_by_name=True)
+TelemetryLabels = dict[str, str]  # type alias for telemetrylabels (typed string map)
 
 
 class State(GenkitModel):

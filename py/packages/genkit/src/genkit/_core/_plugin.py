@@ -16,9 +16,14 @@
 
 """Abstract base class for Genkit plugins."""
 
-import abc
+from __future__ import annotations
 
-from genkit._core._action import Action, ActionKind, ActionMetadata
+import abc
+from typing import ClassVar
+
+from genkit._core._action import Action, ActionKind
+from genkit._core._middleware import GenerateMiddleware
+from genkit._core._typing import ActionMetadata
 
 
 class Plugin(abc.ABC):
@@ -38,8 +43,27 @@ class Plugin(abc.ABC):
 
     @abc.abstractmethod
     async def list_actions(self) -> list[ActionMetadata]:
-        """Return advertised actions for dev UI/reflection listing."""
+        """Return advertised actions for dev UI/reflection listing.
+
+        ``ActionMetadata.action_type`` must be set (typically ``ActionKind.*``) and
+        ``ActionMetadata.name`` must match resolution keys (typically
+        ``{plugin.name}/localName`` for plugin-backed actions).
+        """
         ...
+
+    def list_middleware(self) -> list[GenerateMiddleware]:
+        """Return middleware descriptors for this plugin to register on the app.
+
+        This runs while :class:`Genkit` is being constructed, after
+        built-in middleware is registered. Use unique flat names without
+        slash characters so they do not collide with built-ins or other
+        plugins.
+
+        Returns:
+            Descriptors to list in the Dev UI and to resolve by name from
+            ``generate(use=...)``.
+        """
+        return []
 
     async def model(self, name: str) -> Action | None:
         """Resolve a model action by name (local or namespaced)."""
@@ -50,3 +74,53 @@ class Plugin(abc.ABC):
         """Resolve an embedder action by name (local or namespaced)."""
         target = name if '/' in name else f'{self.name}/{name}'
         return await self.resolve(ActionKind.EMBEDDER, target)
+
+
+class MiddlewarePlugin(Plugin):
+    """Plugin that contributes middleware descriptors only.
+
+    Example:
+        from genkit import Genkit
+        from genkit.middleware import BaseMiddleware
+        from genkit.plugin_api import MiddlewarePlugin, new_middleware
+
+        class PrefixPromptMiddleware(BaseMiddleware):
+            ...
+
+        class MyMiddlewarePlugin(MiddlewarePlugin):
+            name = 'my-middleware'
+            middleware = [
+                new_middleware(
+                    PrefixPromptMiddleware,
+                    name='prefix_prompt',
+                    description='Prepends a fixed prompt',
+                ),
+            ]
+
+        ai = Genkit(plugins=[MyMiddlewarePlugin()])
+    """
+
+    name: str = ''
+    middleware: ClassVar[list[GenerateMiddleware]] = []
+
+    def __init__(self) -> None:
+        if not type(self).name:
+            raise ValueError(f'{type(self).__name__} must set `name` to the plugin namespace string.')
+        if not self.list_middleware():
+            raise ValueError(
+                f'{type(self).__name__} must provide middleware via the `middleware` class '
+                'attribute or a `list_middleware` override. Each entry should come from '
+                'new_middleware(YourMiddleware, name=..., description=...).'
+            )
+
+    async def init(self) -> list[Action]:
+        return []
+
+    async def resolve(self, action_type: ActionKind, name: str) -> Action | None:
+        return None
+
+    async def list_actions(self) -> list[ActionMetadata]:
+        return []
+
+    def list_middleware(self) -> list[GenerateMiddleware]:
+        return list(type(self).middleware)

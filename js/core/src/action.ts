@@ -63,6 +63,7 @@ export interface ActionMetadata<
   metadata?: Record<string, any>;
 }
 
+/** Zod schema for {@link ActionMetadata}. */
 export const ActionMetadataSchema = z.object({
   key: z.string().optional(),
   actionType: z.string().optional(),
@@ -175,19 +176,18 @@ export type Action<
   I extends z.ZodTypeAny = z.ZodTypeAny,
   O extends z.ZodTypeAny = z.ZodTypeAny,
   S extends z.ZodTypeAny = z.ZodTypeAny,
-  RunOptions extends ActionRunOptions<S> = ActionRunOptions<S>,
+  RunOptions extends ActionRunOptions<z.infer<S>> = ActionRunOptions<
+    z.infer<S>
+  >,
 > = ((input?: z.infer<I>, options?: RunOptions) => Promise<z.infer<O>>) & {
   __action: ActionMetadata<I, O, S>;
   __registry?: Registry;
   run(
     input?: z.infer<I>,
-    options?: ActionRunOptions<z.infer<S>>
+    options?: RunOptions
   ): Promise<ActionResult<z.infer<O>>>;
 
-  stream(
-    input?: z.infer<I>,
-    opts?: ActionRunOptions<z.infer<S>>
-  ): StreamingResponse<O, S>;
+  stream(input?: z.infer<I>, opts?: RunOptions): StreamingResponse<O, S>;
 };
 
 /**
@@ -464,16 +464,21 @@ export function action<
       output: invocationPromise,
       stream: (async function* () {
         const reader = chunkStream.getReader();
-        while (true) {
-          const chunk = await reader.read();
-          if (chunk.value) {
-            yield chunk.value;
+        try {
+          while (true) {
+            const chunk = await reader.read();
+            if (chunk.value) {
+              yield chunk.value;
+            }
+            if (chunk.done) {
+              break;
+            }
           }
-          if (chunk.done) {
-            break;
-          }
+          return await invocationPromise;
+        } finally {
+          // Catch prevents unhandled promise rejection if the stream was already cleanly finalized
+          reader.cancel().catch(() => {});
         }
-        return await invocationPromise;
       })(),
     };
   };
@@ -506,7 +511,7 @@ export function defineAction<
   if (isInRuntimeContext()) {
     throw new Error(
       'Cannot define new actions at runtime.\n' +
-        'See: https://github.com/firebase/genkit/blob/main/docs/errors/no_new_actions_at_runtime.md'
+        'See: https://github.com/genkit-ai/genkit/blob/main/docs/errors/no_new_actions_at_runtime.md'
     );
   }
   const act = action(config, async (i: I, options): Promise<z.infer<O>> => {
@@ -560,7 +565,7 @@ export function defineActionAsync<
   return actionPromise;
 }
 
-// Streaming callback function.
+/** Callback function invoked with each streaming chunk during action execution. */
 export type StreamingCallback<T> = (chunk: T) => void;
 
 const streamingAlsKey = 'core.action.streamingCallback';

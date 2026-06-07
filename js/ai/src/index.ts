@@ -65,6 +65,7 @@ export {
 } from './generate/middleware.js';
 export { GenkitAI } from './genkit-ai.js';
 export { Message } from './message.js';
+export { GENKIT_UI_METADATA, GENKIT_UI_WIDGETS } from './metadata.js';
 export {
   GenerateResponseChunkSchema,
   GenerationCommonConfigSchema,
@@ -157,6 +158,7 @@ export {
   respondTool,
   restartTool,
   type InterruptConfig,
+  type MultipartToolAction,
   type ToolAction,
   type ToolArgument,
   type ToolConfig,

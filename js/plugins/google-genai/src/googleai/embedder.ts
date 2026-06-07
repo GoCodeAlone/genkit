@@ -54,9 +54,7 @@ export const EmbeddingConfigSchema = z
     version: z.string().optional(),
     /**
      * The `outputDimensionality` parameter allows you to specify the dimensionality of the embedding output.
-     * By default, the model generates embeddings with 768 dimensions. Models such as
-     * `text-embedding-005`, and `text-multilingual-embedding-002`
-     * allow the output dimensionality to be adjusted between 1 and 768.
+     * By default, `gemini-embedding-2`, `gemini-embedding-2-preview` and `gemini-embedding-001` generate embeddings with 3072 dimensions.
      * By selecting a smaller output dimensionality, users can save memory and storage space, leading to more efficient computations.
      **/
     outputDimensionality: z.number().min(1).optional(),
@@ -77,7 +75,7 @@ function commonRef(
     name: `googleai/${name}`,
     configSchema,
     info: info ?? {
-      dimensions: 768,
+      dimensions: 3072,
       supports: {
         input: ['text'],
       },
@@ -89,7 +87,11 @@ const GENERIC_MODEL = commonRef('embedder');
 
 const KNOWN_MODELS = {
   'gemini-embedding-2-preview': commonRef('gemini-embedding-2-preview', {
-    dimensions: 3072,
+    supports: {
+      input: ['text', 'image', 'video'],
+    },
+  }),
+  'gemini-embedding-2': commonRef('gemini-embedding-2', {
     supports: {
       input: ['text', 'image', 'video'],
     },
@@ -158,6 +160,7 @@ export function defineEmbedder(
     apiVersion: pluginOptions?.apiVersion,
     baseUrl: pluginOptions?.baseUrl,
     customHeaders: pluginOptions?.customHeaders,
+    experimental_debugTraces: pluginOptions?.experimental_debugTraces,
   };
 
   return pluginEmbedder(

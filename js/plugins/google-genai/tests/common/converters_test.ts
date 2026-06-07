@@ -167,6 +167,92 @@ describe('toGeminiMessage', () => {
     },
     {
       should:
+        'should transform genkit message (tool response with missing output and mixed content) correctly',
+      inputMessage: {
+        role: 'tool',
+        content: [
+          {
+            toolResponse: {
+              name: 'screenshot',
+              ref: '1',
+              content: [
+                { text: 'this is a test' },
+                {
+                  media: {
+                    contentType: 'image/png',
+                    url: 'data:image/png;base64,SHORTENED_BASE64_DATA',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      expectedOutput: {
+        role: 'function',
+        parts: [
+          {
+            functionResponse: {
+              id: '1',
+              name: 'screenshot',
+              response: {
+                name: 'screenshot',
+              },
+              parts: [
+                {
+                  text: 'this is a test',
+                },
+                {
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: 'SHORTENED_BASE64_DATA',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      should:
+        'should transform genkit message (tool response with output object and text content) correctly',
+      inputMessage: {
+        role: 'tool',
+        content: [
+          {
+            toolResponse: {
+              name: 'screenshot',
+              ref: '2',
+              output: { status: 'ok' },
+              content: [{ text: 'this is a test' }],
+            },
+          },
+        ],
+      },
+      expectedOutput: {
+        role: 'function',
+        parts: [
+          {
+            functionResponse: {
+              id: '2',
+              name: 'screenshot',
+              response: {
+                name: 'screenshot',
+                content: { status: 'ok' },
+              },
+              parts: [
+                {
+                  text: 'this is a test',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      should:
         'should transform genkit message (inline base64 image content) correctly',
       inputMessage: {
         role: 'user',
@@ -394,6 +480,57 @@ describe('toGeminiMessage', () => {
         ],
       },
     },
+    {
+      should: 'should transform resource part',
+      inputMessage: {
+        role: 'user',
+        content: [
+          {
+            resource: {
+              uri: 'file:///some/file.txt',
+            },
+            metadata: {
+              mimeType: 'text/plain',
+            },
+          },
+        ],
+      },
+      expectedOutput: {
+        role: 'user',
+        parts: [
+          {
+            fileData: {
+              fileUri: 'file:///some/file.txt',
+              mimeType: 'text/plain',
+            },
+          },
+        ],
+      },
+    },
+    {
+      should: 'should transform resource part with default mimeType',
+      inputMessage: {
+        role: 'user',
+        content: [
+          {
+            resource: {
+              uri: 'file:///some/file.txt',
+            },
+          },
+        ],
+      },
+      expectedOutput: {
+        role: 'user',
+        parts: [
+          {
+            fileData: {
+              fileUri: 'file:///some/file.txt',
+              mimeType: 'application/octet-stream',
+            },
+          },
+        ],
+      },
+    },
   ];
   for (const test of testCases) {
     it(test.should, () => {
@@ -415,7 +552,7 @@ describe('toGeminiMessage', () => {
     );
   });
 
-  it('should throw on media part missing contentType for non-data URL', () => {
+  it('should not throw on media part missing contentType for non-data URL', () => {
     const inputMessage = {
       role: 'user',
       content: [
@@ -426,10 +563,16 @@ describe('toGeminiMessage', () => {
         } as any,
       ],
     };
-    assert.throws(
-      () => toGeminiMessage(inputMessage as MessageData),
-      /Must supply a (`)?contentType(`)? when sending File URIs to Gemini/
-    );
+    assert.deepStrictEqual(toGeminiMessage(inputMessage as MessageData), {
+      role: 'user',
+      parts: [
+        {
+          fileData: {
+            fileUri: 'gs://bucket/file',
+          },
+        },
+      ],
+    });
   });
 });
 
@@ -831,6 +974,42 @@ describe('fromGeminiCandidate', () => {
             {
               media: {
                 contentType: 'image/png',
+                url: 'gs://bucket/image.png',
+              },
+            },
+          ],
+        },
+        finishReason: 'unknown',
+        finishMessage: undefined,
+        custom: {
+          citationMetadata: undefined,
+          safetyRatings: undefined,
+        },
+      },
+    },
+    {
+      should:
+        'should transform gemini candidate (fileData without mimeType) correctly',
+      geminiCandidate: {
+        index: 0,
+        content: {
+          role: 'model',
+          parts: [
+            {
+              fileData: {
+                fileUri: 'gs://bucket/image.png',
+              },
+            },
+          ],
+        },
+      },
+      expectedOutput: {
+        index: 0,
+        message: {
+          role: 'model',
+          content: [
+            {
+              media: {
                 url: 'gs://bucket/image.png',
               },
             },

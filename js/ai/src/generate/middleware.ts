@@ -22,6 +22,7 @@ import type { GenerateActionOptions } from '../model-types.js';
 import { type MiddlewareRef } from '../model-types.js';
 import {
   GenerateRequest,
+  GenerateResponseChunkData,
   GenerateResponseData,
   ToolRequestPart,
   ToolResponsePart,
@@ -40,6 +41,7 @@ export const MiddlewareDescSchema = z.object({
   /** User defined metadata for the middleware. */
   metadata: z.record(z.any()).nullish(),
 });
+/** Descriptor for a registered middleware, returned by reflection API. */
 export type MiddlewareDesc = z.infer<typeof MiddlewareDescSchema>;
 
 /**
@@ -98,11 +100,19 @@ export interface GenerateMiddlewareDef {
    * Can be used to inject request parameters, modify the response, or catch errors.
    */
   generate?: (
-    req: GenerateActionOptions,
-    ctx: ActionRunOptions<any>,
+    envelope: {
+      request: GenerateActionOptions;
+      currentTurn: number;
+      messageIndex: number;
+    },
+    ctx: ActionRunOptions<GenerateResponseChunkData>,
     next: (
-      req: GenerateActionOptions,
-      ctx: ActionRunOptions<any>
+      envelope: {
+        request: GenerateActionOptions;
+        currentTurn: number;
+        messageIndex: number;
+      },
+      ctx: ActionRunOptions<GenerateResponseChunkData>
     ) => Promise<GenerateResponseData>
   ) => Promise<GenerateResponseData>;
   /**
@@ -111,10 +121,10 @@ export interface GenerateMiddlewareDef {
    */
   model?: (
     req: GenerateRequest<any>,
-    ctx: ActionRunOptions<any>,
+    ctx: ActionRunOptions<GenerateResponseChunkData>,
     next: (
       req: GenerateRequest<any>,
-      ctx: ActionRunOptions<any>
+      ctx: ActionRunOptions<GenerateResponseChunkData>
     ) => Promise<GenerateResponseData>
   ) => Promise<GenerateResponseData>;
   /**

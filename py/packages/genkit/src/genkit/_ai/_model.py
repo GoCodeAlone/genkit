@@ -26,14 +26,12 @@ from pydantic import BaseModel
 from genkit._core._action import (
     Action,
     ActionKind,
-    ActionMetadata,
     ActionRunContext,
     get_func_description,
 )
 from genkit._core._model import (
     Message,
     ModelConfig,
-    ModelMiddleware,
     ModelRef,
     ModelRequest,
     ModelResponse,
@@ -44,7 +42,7 @@ from genkit._core._model import (
 )
 from genkit._core._registry import Registry
 from genkit._core._schema import to_json_schema
-from genkit._core._typing import ModelInfo
+from genkit._core._typing import ActionMetadata, ModelInfo
 
 # Type alias for model functions (must be async)
 # Use ctx.send_chunk() for streaming
@@ -59,7 +57,7 @@ def model_action_metadata(
     """Create ActionMetadata for a model action."""
     info = info if info is not None else {}
     return ActionMetadata(
-        kind=ActionKind.MODEL,
+        action_type=ActionKind.MODEL,
         name=name,
         input_json_schema=to_json_schema(ModelRequest),
         output_json_schema=to_json_schema(ModelResponse),

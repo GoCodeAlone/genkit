@@ -17,6 +17,7 @@
 import { GenkitError, ToolRequest, z } from 'genkit';
 import {
   CandidateData,
+  MediaPart,
   MessageData,
   ModelReference,
   Part,
@@ -27,6 +28,7 @@ import { JSONPath } from 'jsonpath-plus';
 import {
   FunctionCallingMode,
   FunctionDeclaration,
+  FunctionResponse,
   GenerateContentCandidate as GeminiCandidate,
   Content as GeminiContent,
   Part as GeminiPart,
@@ -108,9 +110,9 @@ function toGeminiSchemaProperty(property?: ToolDefinition['inputSchema']) {
   }
 }
 
-function toGeminiMedia(part: Part): GeminiPart {
+function toGeminiMedia(part: MediaPart): GeminiPart {
   let media: GeminiPart;
-  if (part.media?.url.startsWith('data:')) {
+  if (part.media.url.startsWith('data:')) {
     // Inline data
     const dataUrl = part.media.url;
     const b64Data = dataUrl.substring(dataUrl.indexOf(',')! + 1);
@@ -120,15 +122,10 @@ function toGeminiMedia(part: Part): GeminiPart {
     media = { inlineData: { mimeType: contentType, data: b64Data } };
   } else {
     // File data
-    if (!part.media?.contentType) {
-      throw Error(
-        'Must supply a `contentType` when sending File URIs to Gemini.'
-      );
-    }
     media = {
       fileData: {
-        mimeType: part.media.contentType,
         fileUri: part.media.url,
+        ...(part.media.contentType ? { mimeType: part.media.contentType } : {}),
       },
     };
   }
@@ -162,25 +159,46 @@ function toGeminiToolRequest(part: Part): GeminiPart {
 }
 
 function toGeminiToolResponse(part: Part): GeminiPart {
-  if (!part.toolResponse?.output) {
-    throw Error('Invalid ToolResponsePart: output was missing.');
+  if (part.toolResponse?.output === undefined && !part.toolResponse?.content) {
+    throw Error(
+      'Invalid ToolResponsePart: output or content must be provided.'
+    );
   }
-  const functionResponse: GeminiPart['functionResponse'] = {
-    name: part.toolResponse.name,
+  const functionResponse: FunctionResponse = {
+    name: part.toolResponse!.name,
+    ...(part.toolResponse?.ref !== undefined
+      ? { id: part.toolResponse.ref }
+      : {}),
     response: {
-      name: part.toolResponse.name,
-      content: part.toolResponse.output,
+      name: part.toolResponse!.name,
+      ...(part.toolResponse?.output !== undefined
+        ? { content: part.toolResponse.output }
+        : {}),
     },
+    ...(part.toolResponse?.content !== undefined
+      ? { parts: part.toolResponse.content.map(toGeminiPart) }
+      : {}),
   };
-  if (part.toolResponse.content) {
-    functionResponse.parts = part.toolResponse.content.map(toGeminiPart);
-  }
-  if (part.toolResponse.ref) {
-    functionResponse.id = part.toolResponse.ref;
-  }
+
   return maybeAddGeminiThoughtSignatureAndMetadata(part, {
     functionResponse,
   });
+}
+
+function toGeminiResource(part: Part): GeminiPart {
+  if (!part.resource?.uri) {
+    throw Error('Invalid ResourcePart: uri was missing.');
+  }
+
+  const media: GeminiPart = {
+    fileData: {
+      mimeType:
+        (part.metadata?.mimeType as string) || 'application/octet-stream',
+      fileUri: part.resource.uri,
+    },
+  };
+
+  return maybeAddGeminiThoughtSignatureAndMetadata(part, media);
 }
 
 function toGeminiReasoning(part: Part): GeminiPart {
@@ -266,6 +284,9 @@ function toGeminiPart(part: Part): GeminiPart {
   }
   if (part.toolResponse) {
     return toGeminiToolResponse(part);
+  }
+  if (part.resource) {
+    return toGeminiResource(part);
   }
   if (typeof part.reasoning === 'string') {
     return toGeminiReasoning(part);
@@ -451,11 +472,7 @@ function fromGeminiInlineData(part: GeminiPart): Part {
 }
 
 function fromGeminiFileData(part: GeminiPart): Part {
-  if (
-    !part.fileData ||
-    !part.fileData.hasOwnProperty('mimeType') ||
-    !part.fileData.hasOwnProperty('fileUri')
-  ) {
+  if (!part.fileData || !part.fileData.fileUri) {
     throw new Error(
       'Invalid Gemini File Data Part: missing required properties'
     );
@@ -463,8 +480,10 @@ function fromGeminiFileData(part: GeminiPart): Part {
 
   return maybeAddThoughtSignatureAndMetadata(part, {
     media: {
-      url: part.fileData?.fileUri,
-      contentType: part.fileData?.mimeType,
+      url: part.fileData.fileUri,
+      ...(part.fileData.mimeType
+        ? { contentType: part.fileData.mimeType }
+        : {}),
     },
   });
 }

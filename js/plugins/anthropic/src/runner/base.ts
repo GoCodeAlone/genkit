@@ -45,7 +45,6 @@ import {
   RunnerStream,
   RunnerStreamEvent,
   RunnerStreamingRequestBody,
-  RunnerTool,
   RunnerToolResponseContent,
   RunnerTypes,
 } from './types.js';
@@ -312,14 +311,22 @@ export abstract class BaseRunner<ApiTypes extends RunnerTypes> {
   ):
     | { type: 'enabled'; budget_tokens: number }
     | { type: 'disabled' }
+    | { type: 'adaptive'; display?: 'summarized' | 'omitted' }
     | undefined {
     if (!config) return undefined;
 
-    const { enabled, budgetTokens } = config;
+    const { enabled, budgetTokens, adaptive, display } = config;
+
+    if (adaptive === true) {
+      return {
+        type: 'adaptive',
+        ...(display !== undefined && { display }),
+      };
+    }
 
     if (enabled === true) {
       if (budgetTokens === undefined) {
-        return undefined;
+        throw new Error('budgetTokens is required when thinking is enabled');
       }
       return { type: 'enabled', budget_tokens: budgetTokens };
     }
@@ -406,7 +413,7 @@ export abstract class BaseRunner<ApiTypes extends RunnerTypes> {
    * which lacks the `type` field. We default to `{ type: "object" }` to
    * prevent 400 errors from the Anthropic API.
    */
-  protected toAnthropicTool(tool: ToolDefinition): RunnerTool<ApiTypes> {
+  protected toAnthropicTool(tool: ToolDefinition): ApiTypes['Tool'] {
     const schema = tool.inputSchema || {};
     const inputSchema =
       'type' in schema ? schema : { ...schema, type: 'object' as const };
@@ -414,7 +421,7 @@ export abstract class BaseRunner<ApiTypes extends RunnerTypes> {
       name: tool.name,
       description: tool.description,
       input_schema: inputSchema,
-    } as RunnerTool<ApiTypes>;
+    } as ApiTypes['Tool'];
   }
 
   /**
